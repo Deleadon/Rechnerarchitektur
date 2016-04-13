@@ -3,6 +3,7 @@ seed:      .word   42          ;
 rand_a:    .word   1103515245  ;
 rand_b:    .word   12345       ;
 rand_max:  .word   2147483648  ;
+rand_max1: .word   2147483647  ;
 anw:       .asciiz "The Random number is: "
 anwf:      .asciiz "\nA floating point random value would be: "
 qst:       .asciiz "Please enter the start value: "
@@ -15,7 +16,11 @@ la  $a0, qst          ;
 syscall               ;
 li  $v0, 5            ;#Read int
 syscall
-move $t0, $v0         ;#Temporarily store the value
+#move $t0, $v0         ;#Temporarily store the value
+mfc0 $t0, $9          ;#Execution time as seed
+li  $v0, 1            ;
+move $a0, $t0         ;
+syscall
 
 li  $v0, 4            ;#Print string
 la  $a0, anw          ;
@@ -52,11 +57,13 @@ rand: lw   $s0, rand_a        ;
 frand:
       move $t9, $ra                 ;#Temporarily store return address
       jal       rand                ;
-      move      $t0, $a0            ;
+      move      $t0, $v0            ;
 
       mtc1      $t0, $f1
       cvt.s.w   $f1, $f1
-      mtc1      $s0, $f2
+
+      lw        $s3, rand_max1   ;
+      mtc1      $s3, $f2
       cvt.s.w   $f2, $f2
       div.s     $f0, $f1, $f2       ;# return value in $f0
       jr        $t9
