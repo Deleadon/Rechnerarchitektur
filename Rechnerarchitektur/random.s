@@ -1,5 +1,4 @@
 .data
-seed:      .word   42         ;
 rand_a:    .word   1103515245  ;
 rand_b:    .word   12345       ;
 rand_max:  .word   2147483648  ;
@@ -11,10 +10,19 @@ qstn:      .asciiz "Choose n > 0: "
 exit:      .asciiz "\nWanna more? [1=no, 0=yes] : "
 exitm:     .asciiz "\nSee you next time! :)"
 nl:        .asciiz "\n"
+sep:       .asciiz ".\tnumber:\t"
 
 .text
 .globl main
 #used s-register: $s0-3 for a,b,m,m-1 ; $s4 + $s5: min max range ; $s6: n
+# $s0: a
+# $s1: b
+# $s2: m
+# $s3: m-1
+# $s4: min-range
+# $s5: max-range
+# $s6: n
+# $s7: start adress of array
 main:
       la    $a0, qstmin     ;
       jal   askforint       ;
@@ -25,32 +33,31 @@ main:
       la    $a0, qstn       ;
       jal   askforint       ;
       move  $s6, $v0        ;#$s6 = n
-      #mfc0 $t0, $9         ;#Execution time as seed
+      li    $t0, 4          ;
+      mul   $a0, $s6, $t0   ;# needed space
+      li    $v0, 9          ;#allocate memory
+      syscall
+      move $s7, $v0         ;#store adress
 
-      lw    $a0, seed         ;
+      li   $t1, 9           ;#get count from coprocessor
+      mfc0 $a0, $t1         ;#Execution time as seed
 
-      li    $t6, 0          ;
+      li    $t6, 0          ;#init loop variant
+      #loop and generate n-random numbers
       loop: jal   genrandminmax     ;#main subroutine to generate a value between min and max
-            move $t0, $v0     ;#save seed
+            move $t0, $v0     ;#save seed for next iteration
 
-            li    $v0, 4      ;
-            la    $a0, nl     ;#linebreak
-            syscall           ;
-            li    $v0, 2      ;#print float
-            mov.s $f12, $f0   ;# copy float value
-            syscall           ;
+            li   $t5, 4       ;#4 bytes
+            mul  $t5, $t5, $t6 ;#index = 4*iterator
+            add  $t5, $s7, $t5 ;#adress = startadress + 4*iterator
+
+            swc1 $f0, 0($t5)   ;#save float at array position
             addi $t6, $t6, 1  ;
-            move $a0, $t0     ;# set new seed TODO: Seed changes only once :/
+            move $a0, $t0     ;# set new seed
             bne $t6,$s6, loop ;
 
+      jal printArray          ;
 
-
-      la    $a0, anwf         ;
-      li    $v0, 4            ;#print string
-      syscall               ;
-
-      li    $v0, 2            ;#print float
-      syscall
       j     exitsequence        ;#check if the user wants more
 
 rand: lw    $s0, rand_a        ;
@@ -97,11 +104,6 @@ genrandminmax:
       mov.s $f15, $f0
       jal   minmaxfloat     ;
       mov.s $f12, $f0       ;#return value
-
-      #mov.s $f16, $f0       ;# debugging
-
-      #cvt.w.s $f11, $f12    ;#convert the result to int!
-      #mfc1  $v0, $f11       ;
       jr   $t8              ;
 
 askforint:
@@ -110,6 +112,34 @@ askforint:
       li        $v0, 5            ;#read int
       syscall
       jr        $ra
+
+printArray:
+  li $t0, 0           ;#index
+  printloop: beq   $t0, $s6, endOfLoop ;#head controlled: index == n?
+        li    $v0, 1      ;#print int
+        move  $a0, $t0    ;
+        syscall           ;
+        li    $v0, 4      ;#print string
+        la $a0, sep       ;
+        syscall           ;
+        li $v0, 2         ;#print float
+
+        li   $t2, 4       ;#4 bytes
+        mul  $t2, $t2, $t0 ;#index = 4*iterator
+        add  $t2, $s7, $t2 ;#adress = startadress + 4*iterator
+        lwc1 $f12, 0($t2)   ;
+        syscall             ;
+
+        li    $v0, 4         ;#print string
+        la    $a0, nl        ;
+        syscall              ;
+
+        addi  $t0, 1         ;
+        j     printloop           ;
+  endOfLoop:
+        jr $ra;
+
+
 
 exitsequence:
       li  $v0, 4            ;
