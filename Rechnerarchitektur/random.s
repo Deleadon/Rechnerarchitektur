@@ -15,7 +15,6 @@ sorted:    .asciiz "\nAfter running Mergesort over the files: \n\n"
 
 .text
 .globl main
-#used s-register: $s0-3 for a,b,m,m-1 ; $s4 + $s5: min max range ; $s6: n
 # $s0: a
 # $s1: b
 # $s2: m
@@ -61,15 +60,9 @@ main:
       la  $a0, unsorted       ;
       syscall
 
-      jal printArray          ;
+      #jal printArray         ;#print unsorted array
 
-      move  $a0, $s7          ;
-      li    $t0, 4            ;
-      mul   $t1, $s6, $t0     ;
-      add   $a1, $a0, $t1     ;#end position of array
-      jal   storeOnStack      ;#store a0 and a1 on the stack
-
-      jal mergesort           ;
+      jal sortArray           ;
 
       li  $v0, 4              ;#print string
       la  $a0, sorted         ;
@@ -131,12 +124,36 @@ askforint:
       syscall               ;
       jr        $ra         ;
 
+sortArray:
+      li    $t0, 4            ;
+      sub     $sp, $sp, $t0   ;
+      sw      $ra, 0($sp)     ;#store return address on the stack
+
+      mul   $t1, $s6, $t0     ;#length = n * 4
+      add   $t2, $s7, $t1     ;#end = start + length
+
+      li      $v0, 9          ;#allocate memory
+      move    $a0, $t1        ;#allocate the length again
+      syscall
+      move    $s0, $v0        ;#store adress of allocation in s0
+
+      move  $a0, $s7          ;#start of array
+      move  $a1, $t2          ;#end of array
+
+      jal   storeOnStack      ;#store a0 and a1 on the stack
+
+      jal mergesort           ;
+
+      lw      $t0, 0($sp)   ;#load $ra from stack
+      addi    $sp, $sp, 4   ;#release $ra from current stack
+      jr      $t0           ;
+
 mergesort:    #stack1 = start of array, stack2 = end of array
       lw      $a0, 4($sp)   ;
       lw      $a1, 0($sp)   ;#load arguments from stack
       li      $t0, 4        ;
       sub     $sp, $sp, $t0 ;
-      sw      $ra, 0($sp)   ;#store return address on the stack
+      sw      $ra, 0($sp)   ;#store return address on the
 
       sub     $t1, $a1, $a0 ;#end - start
       move    $s1, $t1      ;#store end-start to s1
@@ -175,13 +192,12 @@ mergesort:    #stack1 = start of array, stack2 = end of array
       move    $t2, $a0      ;
       move    $t3, $a1      ;# save a0 and a1
       move    $t5, $a0      ;# t5 = temp start of array
-      li      $v0, 9        ;#allocate memory
-      sub     $a0, $a1, $a0 ;#end - start
-      move    $t6, $a0      ;# t6 = end-start = length
-      syscall
-      move    $s0, $v0      ;#overwrite a with the start adress of the new array
-      move    $t0, $v0      ;# t1 = start of help array as index
-      add     $t2, $t6, $v0 ;# t2 = end of help array = start + (end-start)
+
+      sub     $t6, $a1, $a0 ;#end-start
+
+      move    $t0, $s0      ;# t1 = start of help array as index
+
+      add     $t2, $t6, $t0 ;# t2 = end of help array = start + (end-start)
       move    $s1, $t2      ;# s1 = end of help array
       copyLoop: #copy everything into the help array
           beq     $t0,$t2, endOfCopy       ;#start == end?
@@ -270,7 +286,8 @@ releaseFromStack:
 
   printArray:
     li $t0, 0           ;#index
-    printloop: beq   $t0, $s6, endOfPrintLoop ;#head controlled: index == n?
+    printloop:
+          beq   $t0, $s6, endOfPrintLoop ;#head controlled: index == n?
           li    $v0, 1      ;#print int
           addi  $a0, $t0, 1 ;
           syscall           ;
