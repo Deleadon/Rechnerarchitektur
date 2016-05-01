@@ -12,6 +12,7 @@ nl:        .asciiz "\n"
 sep:       .asciiz ".\t"
 unsorted:  .asciiz "The Random Number set is: \n\n"
 sorted:    .asciiz "\nAfter running Mergesort over the files: \n\n"
+fileAdr:   .asciiz "/home/robin/Desktop/output.txt"
 
 .text
 .globl main
@@ -68,6 +69,8 @@ main:
       la  $a0, sorted         ;
       syscall
       jal printArray          ;
+
+      jal writeToFile         ;
 
       j   exitsequence        ;#check if the user wants more
 
@@ -285,6 +288,10 @@ releaseFromStack:
   jr      $ra           ;
 
   printArray:
+    li    $t0, 4            ;
+    sub     $sp, $sp, $t0   ;
+    sw      $ra, 0($sp)     ;#store return address on the stack
+
     li $t0, 0           ;#index
     printloop:
           beq   $t0, $s6, endOfPrintLoop ;#head controlled: index == n?
@@ -292,14 +299,14 @@ releaseFromStack:
           addi  $a0, $t0, 1 ;
           syscall           ;
           li    $v0, 4      ;#print string
-          la $a0, sep       ;
+          la    $a0, sep       ;
           syscall           ;
-          li $v0, 2         ;#print float
+          li    $v0, 2         ;#print float
 
-          li   $t2, 4       ;#4 bytes
-          mul  $t2, $t2, $t0 ;#index = 4*iterator
-          add  $t2, $s7, $t2 ;#adress = startadress + 4*iterator
-          lwc1 $f12, 0($t2)   ;
+          li    $t2, 4       ;#4 bytes
+          mul   $t2, $t2, $t0 ;#index = 4*iterator
+          add   $t2, $s7, $t2 ;#adress = startadress + 4*iterator
+          lwc1  $f12, 0($t2)   ;
           syscall             ;
 
           li    $v0, 4         ;#print string
@@ -309,7 +316,11 @@ releaseFromStack:
           addi  $t0, 1         ;
           j     printloop      ;
     endOfPrintLoop:
-          jr $ra;
+          jr    $ra;
+
+          lw      $t0, 0($sp)   ;#load $ra from stack
+          addi    $sp, $sp, 4   ;#release $ra from current stack
+          jr      $t0           ;
 
 exitsequence:
       li  $v0, 4            ;
@@ -326,3 +337,33 @@ exitsequence:
       syscall
       li  $v0, 10           ;#exit
       syscall               ;
+
+writeToFile:
+      li      $t0, 4            ;
+      sub     $sp, $sp, $t0   ;
+      sw      $ra, 0($sp)     ;#store return address on the stack
+
+      #open file
+      li      $v0, 13       # system call for open file
+      la      $a0, fileAdr  # output file name
+      li      $a1, 1        # Open for writing (flags are 0: read, 1: write)
+      li      $a2, 0        # mode is ignored
+      syscall            # open a file (file descriptor returned in $v0)
+      move    $t0, $v0      # save the file descriptor
+
+      move    $a0, $t0 # file handle
+      move    $a1, $s7 # text to print
+
+      li      $t1, 4         ;
+      mul     $a2, $s6, $t1  ; # TEXT LENGTH
+      li      $v0, 15 # opcode
+      syscall
+
+      # Close the file
+      li      $v0, 16       # system call for close file
+      move    $a0, $s6      # file descriptor to close
+      syscall            # close file
+
+      lw      $t0, 0($sp)   ;#load $ra from stack
+      addi    $sp, $sp, 4   ;#release $ra from current stack
+      jr      $t0           ;
